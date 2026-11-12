@@ -3,6 +3,8 @@ name: Build Debian Hybrid TV-Desktop ISO
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
