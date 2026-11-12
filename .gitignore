@@ -1,0 +1,9 @@
+*.iso
+*.hybrid.iso
+*.netboot.tar.gz
+*.vmdk
+output/
+.build/
+cache/
+chroot/
+binary/

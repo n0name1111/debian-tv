@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+echo "=== [Custom Hook] Setting up multiarch for 32-bit Wine ==="
+dpkg --add-architecture i386
+apt-get update
+apt-get install -y --no-install-recommends wine32 libwine:i386
+
+echo "=== [Custom Hook] Configuring permissions ==="
+chmod +x /usr/local/bin/tv-mode-switch 2>/dev/null || true
+chmod 666 /etc/lightdm/lightdm.conf.d/80-autologin.conf 2>/dev/null || true
+
+echo "=== [Custom Hook] Enabling services ==="
+systemctl enable zramswap || true
+systemctl enable lightdm || true
+systemctl enable NetworkManager || true
+
+echo "=== [Custom Hook] Finished successfully ==="

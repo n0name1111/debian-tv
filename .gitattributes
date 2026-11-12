@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.hook.chroot text eol=lf
+*.conf text eol=lf
+*.desktop text eol=lf
+config text eol=lf
+tv-mode-switch text eol=lf

@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=TV Box Mode
+Comment=TV Media Center with Full Desktop App Support
+Exec=/usr/bin/kodi-standalone
+Type=Application

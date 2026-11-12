@@ -1,0 +1,61 @@
+# Base and Live system
+live-boot
+live-config
+live-config-systemd
+systemd-sysv
+sudo
+locales
+network-manager
+network-manager-gnome
+pipewire
+pipewire-pulse
+wireplumber
+alsa-utils
+zram-tools
+pciutils
+usbutils
+firmware-linux
+firmware-misc-nonfree
+
+# Display Server & Login Manager
+xorg
+xserver-xorg
+xinit
+lightdm
+lightdm-gtk-greeter
+
+# Desktop Environment (Lightweight XFCE minimal)
+xfce4-session
+xfwm4
+xfce4-panel
+xfdesktop4
+thunar
+xfce4-terminal
+xfce4-settings
+xfce4-power-manager
+mousepad
+ristretto
+pavucontrol
+zenity
+
+# TV Box Interface
+kodi
+kodi-repository-kodi
+wmctrl
+xdotool
+
+# Windows Compatibility (Wine 64-bit & tools)
+wine
+wine64
+winetricks
+cabextract
+
+# Core Tools
+curl
+wget
+git
+htop
+neofetch
+zip
+unzip
+tar

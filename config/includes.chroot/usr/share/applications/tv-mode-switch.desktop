@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Выбор режима (ТВ / ПК)
+Name[ru]=Выбор режима (ТВ / ПК)
+Comment=Выбрать, какой режим запускать по умолчанию при включении устройства
+Exec=/usr/local/bin/tv-mode-switch
+Icon=preferences-desktop-display
+Terminal=false
+Type=Application
+Categories=Settings;System;Utility;

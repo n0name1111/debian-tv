@@ -1,0 +1,86 @@
+name: Build Debian Hybrid TV-Desktop ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space on runner
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            live-build \
+            debootstrap \
+            xorriso \
+            squashfs-tools \
+            isolinux \
+            syslinux-efi \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            mtools \
+            dosfstools
+
+      - name: Fix permissions
+        run: |
+          chmod -R +x auto/
+          chmod -R +x config/hooks/
+
+      - name: Configure live-build
+        run: |
+          sudo lb config
+
+      - name: Build ISO image
+        run: |
+          sudo lb build
+
+      - name: Prepare build artifacts
+        run: |
+          mkdir -p output
+          ISO_FILE=$(ls *.iso *.hybrid.iso 2>/dev/null | head -n 1)
+          if [ -z "$ISO_FILE" ]; then
+            echo "ERROR: ISO file was not generated!"
+            exit 1
+          fi
+          NEW_NAME="debian-12-tv-desktop-amd64.iso"
+          mv "$ISO_FILE" "output/$NEW_NAME"
+          cd output
+          sha256sum "$NEW_NAME" > "${NEW_NAME}.sha256"
+          ls -lh
+
+      - name: Upload ISO as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-tv-desktop-iso
+          path: output/
+          retention-days: 14
+
+      - name: Create GitHub Release (if tag pushed)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            output/debian-12-tv-desktop-amd64.iso
+            output/debian-12-tv-desktop-amd64.iso.sha256
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# TV / Desktop Mode Switcher
+
+CONF_FILE="/etc/lightdm/lightdm.conf.d/80-autologin.conf"
+
+CURRENT=$(grep -oP '(?<=autologin-session=).*' "$CONF_FILE" 2>/dev/null || echo "tv-box")
+
+CHOICE=$(zenity --list --radiolist \
+  --title="Настройка режима загрузки" \
+  --text="Текущий режим по умолчанию: <b>$CURRENT</b>\nВыберите режим, который будет загружаться автоматически:" \
+  --column="Выбор" --column="ID" --column="Режим интерфейса" \
+  TRUE "tv-box" "Режим ТВ-приставки (Kodi 10-foot UI с поддержкой всех программ)" \
+  FALSE "xfce" "Классический рабочий стол (XFCE Desktop)" \
+  --hide-column=2 --width=480 --height=260)
+
+if [ -n "$CHOICE" ]; then
+    cat << EOF > "$CONF_FILE"
+[Seat:*]
+autologin-user=user
+autologin-user-timeout=0
+autologin-session=$CHOICE
+user-session=$CHOICE
+EOF
+    
+    zenity --info --title="Готово" \
+      --text="Режим по умолчанию успешно изменен на: <b>$CHOICE</b>.\nПри следующей загрузке запустится выбранный режим." \
+      --width=380
+fi

@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+lb config noauto \
+    --distribution bookworm \
+    --architectures amd64 \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --binary-images iso-hybrid \
+    --bootloaders "syslinux,grub-efi" \
+    --memtest none \
+    --firmware-binary true \
+    --firmware-chroot true \
+    --iso-application "Debian Hybrid TV-Desktop OS" \
+    --iso-publisher "Custom Debian Project" \
+    --iso-volume "DEBIAN_TV_DESKTOP" \
+    "${@}"

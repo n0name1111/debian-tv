@@ -1,0 +1,4 @@
+# ZRAM settings: compress RAM with zstd algorithm
+ALGO=zstd
+PERCENT=50
+PRIORITY=100
