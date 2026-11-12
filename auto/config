@@ -2,12 +2,12 @@
 set -e
 
 lb config noauto \
+    --mode debian \
     --distribution bookworm \
     --architectures amd64 \
     --archive-areas "main contrib non-free non-free-firmware" \
     --binary-images iso-hybrid \
-    --bootloaders "syslinux,grub-efi" \
-    --memtest none \
+    --bootloader "syslinux,grub-efi" \
     --firmware-binary true \
     --firmware-chroot true \
     --iso-application "Debian Hybrid TV-Desktop OS" \

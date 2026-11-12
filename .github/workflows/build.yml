@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-iso:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,33 +26,28 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache
           df -h
 
-      - name: Install build dependencies
+      - name: Build ISO image in Debian Bookworm Docker
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            live-build \
-            debootstrap \
-            xorriso \
-            squashfs-tools \
-            isolinux \
-            syslinux-efi \
-            grub-pc-bin \
-            grub-efi-amd64-bin \
-            mtools \
-            dosfstools
-
-      - name: Fix permissions
-        run: |
-          chmod -R +x auto/
-          chmod -R +x config/hooks/
-
-      - name: Configure live-build
-        run: |
-          sudo lb config
-
-      - name: Build ISO image
-        run: |
-          sudo lb build
+          chmod -R +x auto/ config/hooks/
+          docker run --privileged --rm -v $PWD:/work -w /work debian:bookworm bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              live-build \
+              debootstrap \
+              xorriso \
+              squashfs-tools \
+              isolinux \
+              syslinux-efi \
+              grub-pc-bin \
+              grub-efi-amd64-bin \
+              mtools \
+              dosfstools \
+              ca-certificates
+            lb config
+            lb build
+          "
 
       - name: Prepare build artifacts
         run: |
