@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# TV Box Session Runner
+
+# Disable screen blanking / power saving for TV display
+xset -dpms 2>/dev/null || true
+xset s off 2>/dev/null || true
+
+# Start lightweight window manager for handling app windows
+openbox &
+
+# Start sound and network services
+pipewire &
+pipewire-pulse &
+wireplumber &
+nm-applet &
+
+# Start Debian TV Launcher in loop
+while true; do
+    /usr/bin/python3 /usr/local/bin/debian-tv-launcher
+    # If exited with code 0 or explicitly killed to start desktop, break loop
+    STATUS=$?
+    if [ $STATUS -eq 0 ] || [ $STATUS -eq 143 ]; then
+        break
+    fi
+    sleep 1
+done

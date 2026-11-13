@@ -7,3 +7,6 @@ output/
 cache/
 chroot/
 binary/
+
+__pycache__/
+*.pyc

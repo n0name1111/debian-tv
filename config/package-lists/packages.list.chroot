@@ -39,11 +39,19 @@ ristretto
 pavucontrol
 zenity
 
-# TV Box Interface
-kodi
-kodi-repository-kodi
+# TV Box Interface (Custom Lightweight Debian TV Launcher)
+python3
+python3-pyqt5
+python3-pyqt5.qtsvg
+python3-xdg
+openbox
+vlc
+mpv
+firefox-esr
+fonts-dejavu
 wmctrl
 xdotool
+x11-xserver-utils
 
 # Windows Compatibility (Wine 64-bit & tools)
 wine

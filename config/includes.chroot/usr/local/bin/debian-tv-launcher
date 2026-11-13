@@ -1,0 +1,551 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Debian TV Launcher - Ultra-lightweight Smart TV interface
+Designed for 10-foot TV experience, low RAM, and full Linux application support.
+"""
+
+import sys
+import os
+import glob
+import subprocess
+import configparser
+from PyQt5.QtCore import Qt, QTimer, QTime, QDate, QSize, QProcess
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QColor, QKeySequence
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QScrollArea, QGridLayout, QFrame, QStackedWidget,
+    QFileDialog, QMessageBox, QGraphicsDropShadowEffect, QShortcut
+)
+
+STYLE_SHEET = """
+QMainWindow {
+    background-color: #0d1117;
+}
+
+#topBar {
+    background-color: #161b22;
+    border-bottom: 2px solid #30363d;
+    padding: 8px 24px;
+}
+
+#logoLabel {
+    color: #58a6ff;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#clockLabel {
+    color: #f0f6fc;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+#dateLabel {
+    color: #8b949e;
+    font-size: 14px;
+}
+
+#navBar {
+    background-color: #0d1117;
+    padding: 10px 24px;
+}
+
+QPushButton.navBtn {
+    background-color: transparent;
+    color: #8b949e;
+    font-size: 17px;
+    font-weight: 600;
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+}
+
+QPushButton.navBtn:focus, QPushButton.navBtn:hover {
+    background-color: #21262d;
+    color: #58a6ff;
+    border-bottom: 3px solid #58a6ff;
+}
+
+QPushButton.navBtn:checked {
+    background-color: #1f2937;
+    color: #ffffff;
+    border-bottom: 3px solid #58a6ff;
+}
+
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+
+#contentArea {
+    background-color: transparent;
+}
+
+/* App Card Styling */
+QFrame.appCard {
+    background-color: #161b22;
+    border: 2px solid #30363d;
+    border-radius: 14px;
+}
+
+QFrame.appCard:focus {
+    background-color: #1f2937;
+    border: 3px solid #58a6ff;
+}
+
+QFrame.appCard:hover {
+    background-color: #1f2937;
+    border: 3px solid #79c0ff;
+}
+
+QLabel.cardTitle {
+    color: #f0f6fc;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+QLabel.cardSubtitle {
+    color: #8b949e;
+    font-size: 12px;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #0d1117;
+    width: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #30363d;
+    min-height: 20px;
+    border-radius: 4px;
+}
+"""
+
+
+class AppCard(QFrame):
+    """Clickable TV Card with Icon, Title, and focus effects"""
+    def __init__(self, title, subtitle, icon_name, exec_cmd, is_action=False, action_cb=None, parent=None):
+        super().__init__(parent)
+        self.exec_cmd = exec_cmd
+        self.is_action = is_action
+        self.action_cb = action_cb
+        self.setProperty("class", "appCard")
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(220, 150)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(6)
+
+        # Icon
+        self.iconLabel = QLabel(self)
+        self.iconLabel.setAlignment(Qt.AlignCenter)
+        self.iconLabel.setFixedSize(56, 56)
+        
+        pixmap = self.load_icon(icon_name)
+        if pixmap and not pixmap.isNull():
+            self.iconLabel.setPixmap(pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.iconLabel.setText("📦")
+            self.iconLabel.setStyleSheet("font-size: 32px;")
+
+        # Text labels
+        self.titleLabel = QLabel(title, self)
+        self.titleLabel.setProperty("class", "cardTitle")
+        self.titleLabel.setAlignment(Qt.AlignCenter)
+        self.titleLabel.setWordWrap(True)
+
+        self.subLabel = QLabel(subtitle, self)
+        self.subLabel.setProperty("class", "cardSubtitle")
+        self.subLabel.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(self.iconLabel, 0, Qt.AlignCenter)
+        layout.addWidget(self.titleLabel, 0, Qt.AlignCenter)
+        if subtitle:
+            layout.addWidget(self.subLabel, 0, Qt.AlignCenter)
+        layout.addStretch()
+
+    def load_icon(self, icon_name):
+        if not icon_name:
+            return None
+        # Check standard path
+        if os.path.isabs(icon_name) and os.path.exists(icon_name):
+            return QPixmap(icon_name)
+        # Try from theme
+        icon = QIcon.fromTheme(icon_name)
+        if not icon.isNull():
+            return icon.pixmap(48, 48)
+        # Look in standard icon dirs
+        for ext in [".png", ".svg"]:
+            for d in ["/usr/share/pixmaps", "/usr/share/icons/hicolor/48x48/apps", "/usr/share/icons/hicolor/scalable/apps"]:
+                p = os.path.join(d, icon_name + ext)
+                if os.path.exists(p):
+                    return QPixmap(p)
+        return None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.activate()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.activate()
+        else:
+            super().keyPressEvent(event)
+
+    def activate(self):
+        if self.is_action and self.action_cb:
+            self.action_cb()
+        elif self.exec_cmd:
+            try:
+                # Clean up desktop exec field (%u, %f, etc.)
+                cmd = self.exec_cmd.split("%")[0].strip()
+                subprocess.Popen(cmd, shell=True)
+            except Exception as e:
+                print(f"Error launching {self.exec_cmd}: {e}")
+
+
+class TVLauncher(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Debian TV OS")
+        self.setStyleSheet(STYLE_SHEET)
+        self.showFullScreen()
+
+        self.central_widget = QWidget(self)
+        self.setCentralWidget(self.central_widget)
+
+        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        self.setup_top_bar()
+        self.setup_nav_bar()
+        self.setup_content_area()
+
+        # Keyboard shortcuts
+        QShortcut(QKeySequence(Qt.Key_Escape), self, self.on_escape)
+        QShortcut(QKeySequence("Alt+F4"), self, self.confirm_exit)
+
+        # Set initial focus
+        QTimer.singleShot(200, self.focus_initial_card)
+
+    def setup_top_bar(self):
+        top_bar = QWidget(self)
+        top_bar.setObjectName("topBar")
+        layout = QHBoxLayout(top_bar)
+        layout.setContentsMargins(24, 10, 24, 10)
+
+        # Brand / Logo
+        logo = QLabel("📺 Debian TV", top_bar)
+        logo.setObjectName("logoLabel")
+        layout.addWidget(logo)
+
+        layout.addStretch()
+
+        # Live Clock & Date
+        clock_container = QWidget(top_bar)
+        clock_layout = QVBoxLayout(clock_container)
+        clock_layout.setContentsMargins(0, 0, 0, 0)
+        clock_layout.setSpacing(0)
+
+        self.clock_label = QLabel(clock_container)
+        self.clock_label.setObjectName("clockLabel")
+        self.clock_label.setAlignment(Qt.AlignRight)
+
+        self.date_label = QLabel(clock_container)
+        self.date_label.setObjectName("dateLabel")
+        self.date_label.setAlignment(Qt.AlignRight)
+
+        clock_layout.addWidget(self.clock_label)
+        clock_layout.addWidget(self.date_label)
+        layout.addWidget(clock_container)
+
+        self.main_layout.addWidget(top_bar)
+
+        # Timer to update clock every second
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_clock)
+        self.timer.start(1000)
+        self.update_clock()
+
+    def update_clock(self):
+        now_time = QTime.currentTime().toString("HH:mm")
+        now_date = QDate.currentDate().toString("dddd, d MMMM")
+        self.clock_label.setText(now_time)
+        self.date_label.setText(now_date)
+
+    def setup_nav_bar(self):
+        nav_widget = QWidget(self)
+        nav_widget.setObjectName("navBar")
+        self.nav_layout = QHBoxLayout(nav_widget)
+        self.nav_layout.setContentsMargins(24, 8, 24, 8)
+        self.nav_layout.setSpacing(12)
+
+        self.nav_buttons = []
+        categories = [
+            ("⭐ Главное", 0),
+            ("🌐 Интернет", 1),
+            ("🎬 Медиа", 2),
+            ("🍷 Игры и Wine", 3),
+            ("📦 Все приложения", 4),
+            ("⚙️ Система", 5),
+        ]
+
+        for text, index in categories:
+            btn = QPushButton(text, nav_widget)
+            btn.setProperty("class", "navBtn")
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, idx=index: self.switch_category(idx))
+            self.nav_layout.addWidget(btn)
+            self.nav_buttons.append(btn)
+
+        self.nav_layout.addStretch()
+        self.main_layout.addWidget(nav_widget)
+
+    def switch_category(self, index):
+        for i, btn in enumerate(self.nav_buttons):
+            btn.setChecked(i == index)
+        self.stacked_widget.setCurrentIndex(index)
+        self.focus_current_page_first_card()
+
+    def setup_content_area(self):
+        self.stacked_widget = QStackedWidget(self)
+        self.main_layout.addWidget(self.stacked_widget)
+
+        # 0. Favorites / Home
+        self.stacked_widget.addWidget(self.create_page_favorites())
+
+        # 1. Internet
+        self.stacked_widget.addWidget(self.create_page_category("Network", "🌐 Интернет"))
+
+        # 2. Media
+        self.stacked_widget.addWidget(self.create_page_category("AudioVideo", "🎬 Медиа"))
+
+        # 3. Wine / Games
+        self.stacked_widget.addWidget(self.create_page_wine())
+
+        # 4. All Apps
+        self.stacked_widget.addWidget(self.create_page_all_apps())
+
+        # 5. System
+        self.stacked_widget.addWidget(self.create_page_system())
+
+        # Select first tab by default
+        if self.nav_buttons:
+            self.nav_buttons[0].setChecked(True)
+
+    def create_grid_scroll_page(self):
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        container.setObjectName("contentArea")
+        grid = QGridLayout(container)
+        grid.setContentsMargins(32, 20, 32, 32)
+        grid.setSpacing(20)
+        grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        scroll.setWidget(container)
+        return scroll, grid
+
+    def create_page_favorites(self):
+        scroll, grid = self.create_grid_scroll_page()
+        cards = [
+            ("Браузер", "Интернет & YouTube", "firefox-esr", "firefox-esr || chromium || x-www-browser"),
+            ("Видеоплеер", "Просмотр видео и фильмов", "vlc", "vlc || mpv"),
+            ("Файлы", "Диски и флешки", "system-file-manager", "thunar"),
+            ("Wine Проводник", "Запуск Windows .exe", "wine", "wine explorer"),
+            ("Рабочий стол", "Перейти в режим ПК", "preferences-desktop", None, True, self.switch_to_desktop),
+            ("Настройки (ТВ/ПК)", "Выбор режима загрузки", "preferences-desktop-display", None, True, self.switch_mode_tool),
+            ("Терминал", "Командная строка", "utilities-terminal", "xfce4-terminal || xterm"),
+            ("Выключение", "Питание устройства", "system-shutdown", None, True, self.confirm_poweroff),
+        ]
+        self.populate_grid(grid, cards)
+        return scroll
+
+    def create_page_wine(self):
+        scroll, grid = self.create_grid_scroll_page()
+        cards = [
+            ("Открыть .EXE файл", "Выбрать и запустить программу", "wine", None, True, self.choose_and_run_exe),
+            ("Wine Проводник", "Файловый менеджер Windows", "wine", "wine explorer"),
+            ("Настройки Wine", "Конфигурация префикса (winecfg)", "wine-winecfg", "winecfg"),
+            ("Winetricks", "Установка библиотек и DirectX", "winetricks", "winetricks"),
+            ("Диспетчер задач Wine", "Управление процессами", "utilities-system-monitor", "wine taskmgr"),
+            ("Реестр Windows", "Редактор реестра (regedit)", "preferences-system", "wine regedit"),
+        ]
+        self.populate_grid(grid, cards)
+        return scroll
+
+    def create_page_system(self):
+        scroll, grid = self.create_grid_scroll_page()
+        cards = [
+            ("Режим ТВ / ПК", "Выбор режима по умолчанию", "preferences-desktop-display", None, True, self.switch_mode_tool),
+            ("Рабочий стол ПК", "Запустить XFCE Desktop", "user-desktop", None, True, self.switch_to_desktop),
+            ("Громкость", "Микшер звука Pulse/PipeWire", "audio-volume-high", "pavucontrol"),
+            ("Сеть и Wi-Fi", "Подключение к сети", "network-wireless", "nm-connection-editor || network-admin"),
+            ("Диспетчер задач", "Мониторинг ОЗУ и ЦП", "utilities-system-monitor", "xfce4-taskmanager || htop"),
+            ("Терминал", "Командная строка", "utilities-terminal", "xfce4-terminal || xterm"),
+            ("Перезагрузка", "Перезагрузить приставку", "system-reboot", None, True, self.confirm_reboot),
+            ("Выключение", "Завершение работы", "system-shutdown", None, True, self.confirm_poweroff),
+        ]
+        self.populate_grid(grid, cards)
+        return scroll
+
+    def create_page_category(self, category_key, title):
+        scroll, grid = self.create_grid_scroll_page()
+        apps = self.get_installed_apps(category_filter=category_key)
+        self.populate_grid_with_apps(grid, apps)
+        return scroll
+
+    def create_page_all_apps(self):
+        scroll, grid = self.create_grid_scroll_page()
+        apps = self.get_installed_apps()
+        self.populate_grid_with_apps(grid, apps)
+        return scroll
+
+    def populate_grid(self, grid, cards_data):
+        cols = 5
+        for i, data in enumerate(cards_data):
+            title = data[0]
+            sub = data[1]
+            icon = data[2]
+            cmd = data[3] if len(data) > 3 else None
+            is_action = data[4] if len(data) > 4 else False
+            action_cb = data[5] if len(data) > 5 else None
+
+            card = AppCard(title, sub, icon, cmd, is_action, action_cb, self)
+            row = i // cols
+            col = i % cols
+            grid.addWidget(card, row, col)
+
+    def populate_grid_with_apps(self, grid, apps):
+        cols = 5
+        for i, app in enumerate(apps):
+            card = AppCard(app["name"], app.get("comment", ""), app.get("icon", "application-x-executable"), app["exec"], parent=self)
+            row = i // cols
+            col = i % cols
+            grid.addWidget(card, row, col)
+
+    def get_installed_apps(self, category_filter=None):
+        desktop_files = glob.glob("/usr/share/applications/*.desktop") + glob.glob(os.path.expanduser("~/.local/share/applications/*.desktop"))
+        apps = []
+        seen = set()
+
+        for filepath in desktop_files:
+            try:
+                cp = configparser.ConfigParser(interpolation=None)
+                cp.read(filepath, encoding="utf-8")
+                if not cp.has_section("Desktop Entry"):
+                    continue
+                entry = cp["Desktop Entry"]
+
+                if entry.get("NoDisplay", "false").lower() == "true":
+                    continue
+                if entry.get("Type", "Application") != "Application":
+                    continue
+
+                name = entry.get("Name")
+                exec_cmd = entry.get("Exec")
+                if not name or not exec_cmd:
+                    continue
+
+                if name in seen:
+                    continue
+
+                categories = entry.get("Categories", "")
+                if category_filter:
+                    if category_filter not in categories:
+                        continue
+
+                seen.add(name)
+                apps.append({
+                    "name": name,
+                    "exec": exec_cmd,
+                    "icon": entry.get("Icon", "application-x-executable"),
+                    "comment": entry.get("Comment", "")[:28] if entry.get("Comment") else ""
+                })
+            except Exception:
+                continue
+
+        apps.sort(key=lambda x: x["name"].lower())
+        return apps
+
+    def focus_initial_card(self):
+        self.focus_current_page_first_card()
+
+    def focus_current_page_first_card(self):
+        current_page = self.stacked_widget.currentWidget()
+        if current_page:
+            cards = current_page.findChildren(AppCard)
+            if cards:
+                cards[0].setFocus()
+
+    def on_escape(self):
+        # Esc returns to first tab or focuses navigation
+        if self.stacked_widget.currentIndex() != 0:
+            self.switch_category(0)
+        else:
+            self.confirm_poweroff()
+
+    def choose_and_run_exe(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите Windows программу (.exe)", os.path.expanduser("~"), "Исполняемые файлы (*.exe *.bat *.msi);;Все файлы (*)"
+        )
+        if file_path:
+            subprocess.Popen(f'wine "{file_path}"', shell=True)
+
+    def switch_to_desktop(self):
+        # Launch XFCE desktop session or prompt
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Рабочий стол")
+        msg.setText("Перейти в классический режим рабочего стола XFCE?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.Yes)
+        if msg.exec_() == QMessageBox.Yes:
+            # Switch to XFCE session via lightdm or startxfce4
+            subprocess.Popen("pkill -TERM -f debian-tv-launcher; startxfce4 || xfce4-session", shell=True)
+
+    def switch_mode_tool(self):
+        subprocess.Popen("/usr/local/bin/tv-mode-switch", shell=True)
+
+    def confirm_poweroff(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Выключение")
+        msg.setText("Выключить устройство?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.No)
+        if msg.exec_() == QMessageBox.Yes:
+            subprocess.Popen("systemctl poweroff || poweroff", shell=True)
+
+    def confirm_reboot(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Перезагрузка")
+        msg.setText("Перезагрузить устройство?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.No)
+        if msg.exec_() == QMessageBox.Yes:
+            subprocess.Popen("systemctl reboot || reboot", shell=True)
+
+    def confirm_exit(self):
+        self.confirm_poweroff()
+
+
+def main():
+    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+    app = QApplication(sys.argv)
+    app.setApplicationName("Debian TV")
+    
+    # Try loading clean font
+    font = QFont("Sans Serif", 12)
+    app.setFont(font)
+
+    launcher = TVLauncher()
+    launcher.show()
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
